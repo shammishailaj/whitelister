@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	log "github.com/sirupsen/logrus"
@@ -25,13 +24,14 @@ func (p *Ping) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := json.NewEncoder(w).Encode(map[string]string{
-		"version": p.semVer,
-	})
-	if err != nil {
-	    p.l.Warn(err.Error())
-
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
+	//err := json.NewEncoder(w).Encode(map[string]string{
+	//	"version": p.semVer,
+	//})
+	//if err != nil {
+	//    p.l.Warn(err.Error())
+	//
+	//	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	//	return
+	//}
+	w.Write([]byte(p.semVer))
 }
