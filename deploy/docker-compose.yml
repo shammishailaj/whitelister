@@ -6,8 +6,6 @@ services:
     build:
       context: ..
       dockerfile: ./deploy/Dockerfile
-    working_dir: /go/src/whitelister
-    entrypoint: go run ./cmd/whitelister/whitelister.go
     environment:
       - APP_ENV=local
     stop_signal: SIGINT
