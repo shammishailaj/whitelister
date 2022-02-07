@@ -1,5 +1,7 @@
 # Whitelister
-A tool to whitelist your IP on a cloud provider
+A tool to whitelist your IP on a cloud provider.
+
+Requires Docker Compose 2.x
 
 ### Routes
 
