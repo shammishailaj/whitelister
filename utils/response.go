@@ -46,3 +46,19 @@ func (u *Utils) SendResponse(i interface{}, w http.ResponseWriter, mimeType stri
 func (u *Utils) SendResponseJSON(i interface{}, w http.ResponseWriter) {
 	u.SendResponse(i, w, "application/json")
 }
+
+// SendJSONResponse sends a JSON response with the given status code
+func SendJSONResponse(w http.ResponseWriter, data interface{}, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(data)
+}
+
+// SendErrorResponse sends an error response with the given message and status code
+func SendErrorResponse(w http.ResponseWriter, message string, statusCode int) {
+	response := map[string]interface{}{
+		"success": false,
+		"error":   message,
+	}
+	SendJSONResponse(w, response, statusCode)
+}

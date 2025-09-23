@@ -79,11 +79,33 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGINT)
 
-	//r := routes.GetRoutesList(logger, router.NewRouter(), middleware.NewLog(logger, true))
-	//var r routes.Routes
-	//r.Init(logger, router.NewRouter())
 	r := routes.GetRoutesList(logger, router.NewRouter(), middleware.NewLog(logger, true))
+
+	// Health and info endpoints
 	r.Add("/ping", "GET", handlers.NewPing(logger, AppVersionJSON).Handler)
+
+	// Web UI endpoints
+	ui := handlers.NewUI(logger)
+	r.Add("/", "GET", ui.Index)
+
+	// API endpoints for Cloudflare whitelisting
+	cloudflare := handlers.NewCloudflare(logger)
+	r.Add("/api/whitelist/cloudflare", "POST", cloudflare.WhitelistCloudflare)
+	r.Add("/api/cloudflare/ips", "GET", cloudflare.ListCloudflareIPs)
+	r.Add("/api/health", "GET", cloudflare.HealthCheck)
+
+	// API endpoints for secure key management
+	keyManager := handlers.NewKeyManager(logger)
+	r.Add("/api/keys/services", "GET", keyManager.ListAllServices)
+	r.Add("/api/keys/service", "GET", keyManager.ListServiceKeys)
+
+	// API endpoints for Hostinger VPS management
+	hostinger := handlers.NewHostinger(logger)
+	r.Add("/api/hostinger/firewalls", "POST", hostinger.ListFirewalls)
+	r.Add("/api/hostinger/firewall/create", "POST", hostinger.CreateFirewall)
+	r.Add("/api/hostinger/firewall/rules", "POST", hostinger.ListFirewallRules)
+	r.Add("/api/hostinger/test", "POST", hostinger.TestConnection)
+
 	r.Parse()
 
 	//ping := handlers.NewPing(logger, appVersionJSON)

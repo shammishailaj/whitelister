@@ -1,2 +1,40 @@
 host: 0.0.0.0
-port: 8080
+port: 8085
+
+# API Keys Configuration - Multiple keys per service
+api_keys:
+  hostinger:
+    production:
+      key_name: "Production VPS"
+      key_id: "host_prod_01"
+      api_token: ""
+    staging:
+      key_name: "Staging Environment"
+      key_id: "host_stage_01"
+      api_token: ""  # Add your staging key here
+  scaleway:
+    production:
+      key_name: "Production Scaleway"
+      key_id: "scw_prod_01"
+      access_key: ""
+      secret_key: ""
+      organization: ""
+      zone: "fr-par-1"
+    development:
+      key_name: "Development Scaleway"
+      key_id: "scw_dev_01"
+      access_key: ""
+      secret_key: ""
+      organization: ""
+      zone: "fr-par-2"
+  cloudflare:
+    production:
+      key_name: "Production Cloudflare"
+      key_id: "cf_prod_01"
+      api_token: ""  # Add your Cloudflare API token here
+      zone_id: ""    # Add your zone ID here
+
+# External API endpoints
+endpoints:
+  hostinger_api: "https://developers.hostinger.com/api/vps/v1"
+  cloudflare_api: "https://api.cloudflare.com/client/v4"
