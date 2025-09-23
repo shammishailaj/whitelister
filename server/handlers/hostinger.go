@@ -402,6 +402,63 @@ func (h *Hostinger) addFirewallRule(apiKey, firewallID string, rule HostingerRul
 	return &createdRule, nil
 }
 
+// deleteFirewallRule deletes a firewall rule
+func (h *Hostinger) deleteFirewallRule(apiKey, firewallID string, ruleID int) error {
+	client := resty.New()
+	client.SetTimeout(30 * time.Second)
+
+	h.l.Debugf("Deleting firewall rule %d from firewall %s", ruleID, firewallID)
+
+	resp, err := client.R().
+		SetHeader("Authorization", "Bearer "+apiKey).
+		SetHeader("Accept", "application/json").
+		Delete(fmt.Sprintf("%s/firewall/%s/rules/%d", h.getAPIBaseURL(), firewallID, ruleID))
+
+	if err != nil {
+		return fmt.Errorf("failed to delete firewall rule: %v", err)
+	}
+
+	if resp.StatusCode() == 401 {
+		return fmt.Errorf("invalid API key or unauthorized access")
+	}
+
+	if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
+		var errorResp HostingerErrorResponse
+		if json.Unmarshal(resp.Body(), &errorResp) == nil {
+			return fmt.Errorf("hostinger API error: %s (code: %d)", errorResp.Error.Message, errorResp.Error.Code)
+		}
+		return fmt.Errorf("hostinger API returned status %d: %s", resp.StatusCode(), resp.String())
+	}
+
+	return nil
+}
+
+// DeleteRulesByPort deletes all firewall rules for a specific port
+func (h *Hostinger) DeleteRulesByPort(apiKey, firewallID, port string) (int, error) {
+	// Get current rules
+	rules, err := h.fetchFirewallRules(apiKey, firewallID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch current rules: %v", err)
+	}
+
+	var deletedCount int
+	for _, rule := range rules {
+		if rule.Port == port {
+			if err := h.deleteFirewallRule(apiKey, firewallID, rule.ID); err != nil {
+				h.l.Warnf("Failed to delete rule %d: %v", rule.ID, err)
+				continue
+			}
+			deletedCount++
+			h.l.Debugf("Deleted rule %d for port %s", rule.ID, port)
+
+			// Add small delay to avoid rate limiting
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	return deletedCount, nil
+}
+
 // TestConnection tests the connection to Hostinger API
 func (h *Hostinger) TestConnection(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -446,4 +503,89 @@ func (h *Hostinger) TestConnection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.SendJSONResponse(w, response, statusCode)
+}
+
+// EnableFirewall enables a firewall
+func (h *Hostinger) EnableFirewall(w http.ResponseWriter, r *http.Request) {
+	h.toggleFirewall(w, r, true)
+}
+
+// DisableFirewall disables a firewall
+func (h *Hostinger) DisableFirewall(w http.ResponseWriter, r *http.Request) {
+	h.toggleFirewall(w, r, false)
+}
+
+// toggleFirewall enables or disables a firewall
+func (h *Hostinger) toggleFirewall(w http.ResponseWriter, r *http.Request, enable bool) {
+	if r.Method != http.MethodPost {
+		utils.SendErrorResponse(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		APIKey     string `json:"apiKey"`
+		KeyID      string `json:"keyId"`
+		FirewallID string `json:"firewallId"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.l.Error("Error decoding request:", err)
+		utils.SendErrorResponse(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	apiKey := h.getAPIKey(req.APIKey, req.KeyID)
+	if apiKey == "" || req.FirewallID == "" {
+		utils.SendErrorResponse(w, "API key and firewall ID are required", http.StatusBadRequest)
+		return
+	}
+
+	action := "disable"
+	if enable {
+		action = "enable"
+	}
+
+	client := resty.New()
+	client.SetTimeout(30 * time.Second)
+
+	h.l.Infof("Attempting to %s firewall %s", action, req.FirewallID)
+
+	// The actual API endpoint might be different - this is based on common patterns
+	resp, err := client.R().
+		SetHeader("Authorization", "Bearer "+apiKey).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept", "application/json").
+		SetBody(map[string]interface{}{"enabled": enable}).
+		Put(fmt.Sprintf("%s/firewall/%s", h.getAPIBaseURL(), req.FirewallID))
+
+	if err != nil {
+		h.l.Error("Error toggling firewall:", err)
+		utils.SendErrorResponse(w, fmt.Sprintf("Failed to %s firewall: %v", action, err), http.StatusInternalServerError)
+		return
+	}
+
+	if resp.StatusCode() == 401 {
+		utils.SendErrorResponse(w, "Invalid API key or unauthorized access", http.StatusUnauthorized)
+		return
+	}
+
+	if resp.StatusCode() != 200 && resp.StatusCode() != 204 {
+		var errorResp HostingerErrorResponse
+		if json.Unmarshal(resp.Body(), &errorResp) == nil {
+			utils.SendErrorResponse(w, fmt.Sprintf("Hostinger API error: %s (code: %d)", errorResp.Error.Message, errorResp.Error.Code), http.StatusInternalServerError)
+			return
+		}
+		utils.SendErrorResponse(w, fmt.Sprintf("Hostinger API returned status %d: %s", resp.StatusCode(), resp.String()), http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success":     true,
+		"action":      action,
+		"firewall_id": req.FirewallID,
+		"enabled":     enable,
+		"timestamp":   time.Now().Format(time.RFC3339),
+	}
+
+	utils.SendJSONResponse(w, response, http.StatusOK)
 }

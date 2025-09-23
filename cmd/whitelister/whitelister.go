@@ -88,11 +88,12 @@ func main() {
 	ui := handlers.NewUI(logger)
 	r.Add("/", "GET", ui.Index)
 
-	// API endpoints for Cloudflare whitelisting
+	// API endpoints for Cloudflare whitelisting and IP management
 	cloudflare := handlers.NewCloudflare(logger)
 	r.Add("/api/whitelist/cloudflare", "POST", cloudflare.WhitelistCloudflare)
 	r.Add("/api/cloudflare/ips", "GET", cloudflare.ListCloudflareIPs)
 	r.Add("/api/health", "GET", cloudflare.HealthCheck)
+	r.Add("/api/public-ip", "GET", cloudflare.GetPublicIP)
 
 	// API endpoints for secure key management
 	keyManager := handlers.NewKeyManager(logger)
@@ -104,6 +105,8 @@ func main() {
 	r.Add("/api/hostinger/firewalls", "POST", hostinger.ListFirewalls)
 	r.Add("/api/hostinger/firewall/create", "POST", hostinger.CreateFirewall)
 	r.Add("/api/hostinger/firewall/rules", "POST", hostinger.ListFirewallRules)
+	r.Add("/api/hostinger/firewall/enable", "POST", hostinger.EnableFirewall)
+	r.Add("/api/hostinger/firewall/disable", "POST", hostinger.DisableFirewall)
 	r.Add("/api/hostinger/test", "POST", hostinger.TestConnection)
 
 	r.Parse()

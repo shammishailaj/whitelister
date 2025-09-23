@@ -216,7 +216,7 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
 
             <div class="form-group" id="keySelectGroup" style="display: none;">
                 <label for="keySelect">Select API Key</label>
-                <select id="keySelect" name="keySelect" required>
+                <select id="keySelect" name="keySelect">
                     <option value="">Choose an API key...</option>
                 </select>
                 <button type="button" id="testConnection" class="btn" style="margin-top: 0.5rem; background: linear-gradient(135deg, #28a745, #20c997);">
@@ -226,7 +226,7 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
 
             <div class="form-group" id="firewallSelectGroup" style="display: none;">
                 <label for="firewallSelect">Select Firewall</label>
-                <select id="firewallSelect" name="firewallSelect" required>
+                <select id="firewallSelect" name="firewallSelect">
                     <option value="">Choose a firewall...</option>
                 </select>
                 <button type="button" id="createFirewall" class="btn" style="margin-top: 0.5rem; background: linear-gradient(135deg, #17a2b8, #007bff);">
@@ -240,7 +240,27 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
                 </div>
             </div>
 
+            <div class="form-group" id="firewallControlsGroup" style="display: none;">
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button type="button" id="enableFirewall" class="btn" style="flex: 1; background: linear-gradient(135deg, #28a745, #20c997);">
+                        ✅ Enable Firewall
+                    </button>
+                    <button type="button" id="disableFirewall" class="btn" style="flex: 1; background: linear-gradient(135deg, #dc3545, #fd7e14);">
+                        ❌ Disable Firewall
+                    </button>
+                </div>
+            </div>
+
             <div class="form-group">
+                <label for="accessType">Access Type</label>
+                <select id="accessType" name="accessType" required>
+                    <option value="cloudflare">Cloudflare CDN (HTTP/HTTPS)</option>
+                    <option value="ssh">SSH Access (Port 22)</option>
+                    <option value="custom">Custom Port</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="protocolGroup">
                 <label for="protocol">Protocol</label>
                 <select id="protocol" name="protocol" required>
                     <option value="both">Both HTTP & HTTPS</option>
@@ -249,12 +269,55 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
                 </select>
             </div>
 
-            <div class="form-group">
-                <label for="description">Description (Optional)</label>
-                <textarea id="description" name="description" rows="3" placeholder="Cloudflare IP whitelist for production server"></textarea>
+            <div class="form-group" id="customPortGroup" style="display: none;">
+                <label for="customPort">Custom Port Number</label>
+                <input type="number" id="customPort" name="customPort" min="1" max="65535" placeholder="e.g., 8080, 3000, 9090">
             </div>
 
-            <button type="submit" class="btn">🚀 Whitelist Cloudflare IPs</button>
+            <div class="form-group" id="sshIPGroup" style="display: none;">
+                <label for="sshIPs">SSH IP Addresses</label>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <button type="button" id="detectIP" class="btn" style="flex: 1; background: linear-gradient(135deg, #007bff, #6f42c1);">
+                        🔍 Detect My IP
+                    </button>
+                </div>
+                <textarea id="sshIPs" name="sshIPs" rows="4" placeholder="Enter IP addresses (one per line)&#10;192.168.1.100&#10;203.0.113.0/24&#10;2001:db8::1"></textarea>
+                <small style="color: #666; font-size: 0.9em;">
+                    Enter IP addresses or CIDR ranges, one per line. You can mix IPv4 and IPv6 addresses.
+                </small>
+            </div>
+
+            <div class="form-group" id="customIPGroup" style="display: none;">
+                <label for="customIPs">IP Addresses for Custom Port</label>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <button type="button" id="detectIPCustom" class="btn" style="flex: 1; background: linear-gradient(135deg, #007bff, #6f42c1);">
+                        🔍 Detect My IP
+                    </button>
+                </div>
+                <textarea id="customIPs" name="customIPs" rows="4" placeholder="Enter IP addresses (one per line)&#10;192.168.1.100&#10;203.0.113.0/24"></textarea>
+                <small style="color: #666; font-size: 0.9em;">
+                    Enter IP addresses or CIDR ranges, one per line.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="cleanupExisting" name="cleanupExisting">
+                    <label for="cleanupExisting" style="margin: 0; cursor: pointer;">
+                        🧹 Remove existing rules for selected ports first
+                    </label>
+                </div>
+                <small style="color: #666; font-size: 0.9em; margin-top: 0.25rem; display: block;">
+                    Check this to delete all existing rules for the same ports before adding new ones.
+                </small>
+            </div>
+
+            <div class="form-group">
+                <label for="description">Description (Optional)</label>
+                <textarea id="description" name="description" rows="3" placeholder="Firewall rule description"></textarea>
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">🚀 Add Firewall Rules</button>
         </form>
 
         <div class="loading" id="loading">
@@ -316,6 +379,121 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
             selectedKeyId = this.value;
         });
 
+        // Handle access type changes
+        document.getElementById('accessType').addEventListener('change', function() {
+            const accessType = this.value;
+            const protocolGroup = document.getElementById('protocolGroup');
+            const customPortGroup = document.getElementById('customPortGroup');
+            const sshIPGroup = document.getElementById('sshIPGroup');
+            const customIPGroup = document.getElementById('customIPGroup');
+            const submitBtn = document.getElementById('submitBtn');
+
+            // Hide all conditional groups
+            protocolGroup.style.display = 'none';
+            customPortGroup.style.display = 'none';
+            sshIPGroup.style.display = 'none';
+            customIPGroup.style.display = 'none';
+
+            // Show relevant groups based on access type
+            switch(accessType) {
+                case 'cloudflare':
+                    protocolGroup.style.display = 'block';
+                    submitBtn.innerHTML = '🚀 Whitelist Cloudflare IPs';
+                    break;
+                case 'ssh':
+                    sshIPGroup.style.display = 'block';
+                    submitBtn.innerHTML = '🔐 Add SSH Access Rules';
+                    break;
+                case 'custom':
+                    customPortGroup.style.display = 'block';
+                    customIPGroup.style.display = 'block';
+                    submitBtn.innerHTML = '🛡️ Add Custom Port Rules';
+                    break;
+            }
+        });
+
+        // IP detection functionality
+        async function detectPublicIP(targetTextareaId) {
+            try {
+                const response = await fetch('/api/public-ip');
+                const result = await response.json();
+
+                if (result.success) {
+                    const textarea = document.getElementById(targetTextareaId);
+                    const currentValue = textarea.value.trim();
+                    const newIP = result.external_ip || result.client_ip;
+
+                    if (currentValue) {
+                        textarea.value = currentValue + '\n' + newIP;
+                    } else {
+                        textarea.value = newIP;
+                    }
+
+                    alert('✅ Detected IP: ' + newIP);
+                } else {
+                    alert('❌ Failed to detect IP address');
+                }
+            } catch (error) {
+                alert('❌ Network error: ' + error.message);
+            }
+        }
+
+        document.getElementById('detectIP').addEventListener('click', function() {
+            detectPublicIP('sshIPs');
+        });
+
+        document.getElementById('detectIPCustom').addEventListener('click', function() {
+            detectPublicIP('customIPs');
+        });
+
+        // Firewall enable/disable functionality
+        async function toggleFirewall(enable) {
+            if (!selectedKeyId) {
+                alert('Please select an API key first');
+                return;
+            }
+
+            const selectedFirewallId = document.getElementById('firewallSelect').value;
+            if (!selectedFirewallId) {
+                alert('Please select a firewall first');
+                return;
+            }
+
+            const action = enable ? 'enable' : 'disable';
+            const endpoint = enable ? '/api/hostinger/firewall/enable' : '/api/hostinger/firewall/disable';
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        keyId: selectedKeyId,
+                        firewallId: selectedFirewallId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert('✅ Firewall ' + action + 'd successfully!');
+                } else {
+                    alert('❌ Failed to ' + action + ' firewall: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('❌ Network error: ' + error.message);
+            }
+        }
+
+        document.getElementById('enableFirewall').addEventListener('click', function() {
+            toggleFirewall(true);
+        });
+
+        document.getElementById('disableFirewall').addEventListener('click', function() {
+            toggleFirewall(false);
+        });
+
         // Test connection and load resources
         document.getElementById('testConnection').addEventListener('click', async function() {
             const selectedService = document.getElementById('serviceSelect').value;
@@ -348,6 +526,7 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
                         firewalls = result.firewalls;
                         populateFirewallSelect(firewalls);
                         document.getElementById('firewallSelectGroup').style.display = 'block';
+                        document.getElementById('firewallControlsGroup').style.display = 'block';
                         button.innerHTML = '✅ Connected!';
                         setTimeout(() => {
                             button.innerHTML = originalText;
@@ -496,12 +675,46 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
 
             try {
                 const formData = new FormData(form);
+                const accessType = formData.get('accessType');
+
+                // Build request data based on access type
                 const data = {
                     firewallId: selectedFirewall,
                     keyId: selectedKeyId,
-                    protocol: formData.get('protocol'),
-                    description: formData.get('description') || 'Cloudflare IP whitelist'
+                    cleanupExisting: formData.get('cleanupExisting') === 'on',
+                    description: formData.get('description') || 'Firewall rule'
                 };
+
+                // Add type-specific data
+                if (accessType === 'ssh') {
+                    const sshIPs = formData.get('sshIPs');
+                    if (!sshIPs || !sshIPs.trim()) {
+                        alert('Please enter at least one IP address for SSH access');
+                        loading.style.display = 'none';
+                        form.style.display = 'block';
+                        return;
+                    }
+                    data.sshMode = true;
+                    data.sshIPs = sshIPs.trim().split('\n').map(ip => ip.trim()).filter(ip => ip);
+                    data.description = data.description || 'SSH access rules';
+                } else if (accessType === 'custom') {
+                    const customPort = formData.get('customPort');
+                    const customIPs = formData.get('customIPs');
+
+                    if (!customPort || !customIPs || !customIPs.trim()) {
+                        alert('Please enter both a custom port and at least one IP address');
+                        loading.style.display = 'none';
+                        form.style.display = 'block';
+                        return;
+                    }
+                    data.customPort = customPort;
+                    data.sshIPs = customIPs.trim().split('\n').map(ip => ip.trim()).filter(ip => ip);
+                    data.description = data.description || 'Custom port ' + customPort + ' access rules';
+                } else {
+                    // Cloudflare mode
+                    data.protocol = formData.get('protocol');
+                    data.description = data.description || 'Cloudflare IP whitelist';
+                }
 
                 const response = await fetch('/api/whitelist/cloudflare', {
                     method: 'POST',
@@ -524,6 +737,12 @@ func (u *UI) Index(w http.ResponseWriter, r *http.Request) {
                     }
                     if (result.rules_added) {
                         status.innerHTML += '<p><strong>Rules Added:</strong> ' + result.rules_added + '</p>';
+                    }
+                    if (result.rules_deleted) {
+                        status.innerHTML += '<p><strong>Rules Deleted:</strong> ' + result.rules_deleted + '</p>';
+                    }
+                    if (result.ip_type) {
+                        status.innerHTML += '<p><strong>IP Type:</strong> ' + result.ip_type + '</p>';
                     }
                 } else {
                     status.className = 'status error';
